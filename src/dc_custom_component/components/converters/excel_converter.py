@@ -1,6 +1,6 @@
 import io
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple, Literal
 
 import pandas as pd
 from haystack import Document, logging, component
@@ -12,11 +12,19 @@ logger = logging.getLogger(__name__)
 
 @component
 class PandasExcelToDocument:
-    def __init__(self):
+    def __init__(
+        self,
+        table_format: Literal["csv", "markdown"] = "csv",
+        table_format_kwargs: Optional[Dict[str, Any]] = None
+    ):
         """
         Create a PandasExcelToDocument component.
+
+        :param table_format: The format to convert the Excel file to.
+        :param table_format_kwargs: Additional keyword arguments to pass to the table format function.
         """
-        pass
+        self.table_format = table_format
+        self.table_format_kwargs = table_format_kwargs or {}
 
     @component.output_types(documents=List[Document])
     def run(
@@ -76,7 +84,6 @@ class PandasExcelToDocument:
         """
         Extract tables from a Excel file.
         """
-        # TODO Is there more metadata that can be extracted from the Excel file?
         df_dict = pd.read_excel(
             io=io.BytesIO(bytestream.data),
             header=None,  # Don't assign any pandas column labels
@@ -94,7 +101,27 @@ class PandasExcelToDocument:
         tables = []
         metadata = []
         for key in df_dict:
-            # TODO Add option to choose different formats eg. markdown
-            tables.append(df_dict[key].to_csv(header=False, index=False))
+            if self.table_format == "csv":
+                resolved_kwargs = {
+                    "index": False,
+                    "header": False,
+                    **self.table_format_kwargs,
+                }
+                tables.append(
+                    df_dict[key].to_csv(**resolved_kwargs)
+                )
+            elif self.table_format == "markdown":
+                resolved_kwargs = {
+                    "index": False,
+                    "headers": (),
+                    "tablefmt": "pipe",  # tablefmt 'plain', 'simple', 'grid', 'pipe', 'orgtbl', 'rst', 'mediawiki',
+                                         # 'latex', 'latex_raw', 'latex_booktabs', 'latex_longtable' and tsv
+                    **self.table_format_kwargs,
+                }
+                tables.append(
+                    df_dict[key].to_markdown(**resolved_kwargs)
+                )
+            else:
+                raise ValueError(f"Unsupported export format: {self.table_format}. Choose either 'csv' or 'markdown'.")
             metadata.append({"sheet_name": key})
         return tables, [{}]
