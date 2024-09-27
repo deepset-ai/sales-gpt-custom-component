@@ -124,4 +124,4 @@ class PandasExcelToDocument:
             else:
                 raise ValueError(f"Unsupported export format: {self.table_format}. Choose either 'csv' or 'markdown'.")
             metadata.append({"sheet_name": key})
-        return tables, [{}]
+        return tables, metadata
