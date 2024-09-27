@@ -1,6 +1,6 @@
 import io
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import pandas as pd
 from haystack import Document, logging, component
@@ -51,7 +51,7 @@ class PandasExcelToDocument:
                 logger.warning("Could not read {source}. Skipping it. Error: {error}", source=source, error=e)
                 continue
             try:
-                tables = self._extract_tables(bytestream)
+                tables, tables_metadata = self._extract_tables(bytestream)
             except Exception as e:
                 logger.warning(
                     "Could not read {source} and convert it to a pandas dataframe, skipping. Error: {error}",
@@ -60,33 +60,41 @@ class PandasExcelToDocument:
                 )
                 continue
 
-            # TODO Loop over tables and create a Document for each table
-            # TODO Is there an equivalent for excel?
-            # excel_metadata = self._get_excel_metadata(document=file)
-            merged_metadata = {
-                **bytestream.meta,
-                **metadata,
-                # "excel": excel_metadata
-            }
-            document = Document(content=tables[0], meta=merged_metadata)
-            documents.append(document)
+            # Loop over tables and create a Document for each table
+            for table, excel_metadata in zip(tables, tables_metadata):
+                merged_metadata = {
+                    **bytestream.meta,
+                    **metadata,
+                    **excel_metadata
+                }
+                document = Document(content=table, meta=merged_metadata)
+                documents.append(document)
 
         return {"documents": documents}
 
-    def _extract_tables(self, bytestream: ByteStream) -> List[str]:
+    def _extract_tables(self, bytestream: ByteStream) -> Tuple[List[str], List[Dict]]:
         """
         Extract tables from a Excel file.
         """
-        df = pd.read_excel(
+        # TODO Is there more metadata that can be extracted from the Excel file?
+        df_dict = pd.read_excel(
             io=io.BytesIO(bytestream.data),
             header=None,  # Don't assign any pandas column labels
             sheet_name=None,  # Loads all sheets
+            engine="openpyxl",  # Use openpyxl as the engine to read the Excel file
         )
 
         # Drop all columns and rows that are completely empty
-        df = df.dropna(axis=1, how="all")
-        df = df.dropna(axis=0, how="all")
+        for key in df_dict:
+            df = df_dict[key]
+            df = df.dropna(axis=1, how="all", ignore_index=True)
+            df = df.dropna(axis=0, how="all", ignore_index=True)
+            df_dict[key] = df
 
-        # TODO Add option to choose different formats eg. markdown
-        text = df.to_csv(header=False, index=False)
-        return [text]
+        tables = []
+        metadata = []
+        for key in df_dict:
+            # TODO Add option to choose different formats eg. markdown
+            tables.append(df_dict[key].to_csv(header=False, index=False))
+            metadata.append({"sheet_name": key})
+        return tables, [{}]
