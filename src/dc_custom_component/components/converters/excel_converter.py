@@ -16,6 +16,8 @@ class PandasExcelToDocument:
         self,
         table_format: Literal["csv", "markdown"] = "csv",
         preserve_cell_identifiers: bool = False,
+        sheet_id_src: Optional[str] = None,
+        sheet_id_label: Optional[str] = None,
         table_format_kwargs: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -23,11 +25,17 @@ class PandasExcelToDocument:
 
         :param table_format: The format to convert the Excel file to.
         :param preserve_cell_identifiers: Whether to keep the cell identifiers or not.
+        :param sheet_id_src: key in the provided metadata that has the dict[sheet_name, sheet_id] mapping.
+        :param sheet_id_label: output label for the sheet_id using the mapping above.
         :param table_format_kwargs: Additional keyword arguments to pass to the table format function.
         """
         self.table_format = table_format
         self.table_format_kwargs = table_format_kwargs or {}
         self.preserve_cell_identifiers = preserve_cell_identifiers
+        if (sheet_id_src is None) != (sheet_id_label is None):
+            raise ValueError(f"{sheet_id_src=} and {sheet_id_label=} should either be both None or both specified.")
+        self.sheet_id_src = sheet_id_src
+        self.sheet_id_label = sheet_id_label
 
     @component.output_types(documents=List[Document])
     def run(
@@ -73,6 +81,11 @@ class PandasExcelToDocument:
 
             # Loop over tables and create a Document for each table
             for table, excel_metadata in zip(tables, tables_metadata):
+                if self.sheet_id_src is not None:
+                    sheet_id = ''
+                    if mapping := metadata.get(self.sheet_id_src, None):
+                        sheet_id = mapping.get(excel_metadata['sheet_name'], '')
+                    excel_metadata[self.sheet_id_label] = sheet_id
                 merged_metadata = {
                     **bytestream.meta,
                     **metadata,
