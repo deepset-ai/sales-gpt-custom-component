@@ -15,16 +15,19 @@ class PandasExcelToDocument:
     def __init__(
         self,
         table_format: Literal["csv", "markdown"] = "csv",
-        table_format_kwargs: Optional[Dict[str, Any]] = None
+        preserve_cell_identifiers: bool = False,
+        table_format_kwargs: Optional[Dict[str, Any]] = None,
     ):
         """
         Create a PandasExcelToDocument component.
 
         :param table_format: The format to convert the Excel file to.
+        :param preserve_cell_identifiers: Whether to keep the cell identifiers or not.
         :param table_format_kwargs: Additional keyword arguments to pass to the table format function.
         """
         self.table_format = table_format
         self.table_format_kwargs = table_format_kwargs or {}
+        self.preserve_cell_identifiers = preserve_cell_identifiers
 
     @component.output_types(documents=List[Document])
     def run(
@@ -80,6 +83,18 @@ class PandasExcelToDocument:
 
         return {"documents": documents}
 
+    @staticmethod
+    def _generate_excel_column_names(n_cols):
+        result = []
+        for i in range(n_cols):
+            col_name = ''
+            num = i
+            while num >= 0:
+                col_name = chr(num % 26 + 65) + col_name
+                num = num // 26 - 1
+            result.append(col_name)
+        return result
+
     def _extract_tables(self, bytestream: ByteStream) -> Tuple[List[str], List[Dict]]:
         """
         Extract tables from a Excel file.
@@ -91,9 +106,20 @@ class PandasExcelToDocument:
             engine="openpyxl",  # Use openpyxl as the engine to read the Excel file
         )
 
+        keep_index = False
+        out_header = False if self.table_format == 'csv' else ()
+
         # Drop all columns and rows that are completely empty
         for key in df_dict:
             df = df_dict[key]
+            if self.preserve_cell_identifiers:
+                # row starts at 1
+                df.index = df.index + 1
+                # columns are alphabets
+                header = PandasExcelToDocument._generate_excel_column_names(df.shape[1])
+                df.columns = header
+                keep_index = True
+                out_header = True if self.table_format == 'csv' else header
             df = df.dropna(axis=1, how="all", ignore_index=True)
             df = df.dropna(axis=0, how="all", ignore_index=True)
             df_dict[key] = df
@@ -103,8 +129,8 @@ class PandasExcelToDocument:
         for key in df_dict:
             if self.table_format == "csv":
                 resolved_kwargs = {
-                    "index": False,
-                    "header": False,
+                    "index": keep_index,
+                    "header": out_header,
                     **self.table_format_kwargs,
                 }
                 tables.append(
@@ -112,8 +138,8 @@ class PandasExcelToDocument:
                 )
             elif self.table_format == "markdown":
                 resolved_kwargs = {
-                    "index": False,
-                    "headers": (),
+                    "index": keep_index,
+                    "headers": out_header,
                     "tablefmt": "pipe",  # tablefmt 'plain', 'simple', 'grid', 'pipe', 'orgtbl', 'rst', 'mediawiki',
                                          # 'latex', 'latex_raw', 'latex_booktabs', 'latex_longtable' and tsv
                     **self.table_format_kwargs,
