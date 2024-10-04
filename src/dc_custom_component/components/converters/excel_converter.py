@@ -97,7 +97,7 @@ class PandasExcelToDocument:
         return {"documents": documents}
 
     @staticmethod
-    def _generate_excel_column_names(n_cols):
+    def _generate_excel_column_names(n_cols : int) -> List[str]:
         result = []
         for i in range(n_cols):
             col_name = ''
