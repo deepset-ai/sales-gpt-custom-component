@@ -125,6 +125,7 @@ class PandasExcelToDocument:
         # Drop all columns and rows that are completely empty
         for key in df_dict:
             df = df_dict[key]
+            ignore_index = True
             if self.preserve_cell_identifiers:
                 # row starts at 1
                 df.index = df.index + 1
@@ -133,8 +134,9 @@ class PandasExcelToDocument:
                 df.columns = header
                 keep_index = True
                 out_header = True if self.table_format == 'csv' else header
-            df = df.dropna(axis=1, how="all", ignore_index=True)
-            df = df.dropna(axis=0, how="all", ignore_index=True)
+                ignore_index = False
+            df = df.dropna(axis=1, how="all", ignore_index=ignore_index)
+            df = df.dropna(axis=0, how="all", ignore_index=ignore_index)
             df_dict[key] = df
 
         tables = []
