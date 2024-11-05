@@ -3,15 +3,15 @@ from typing import List
 import pandas as pd
 import re
 
-from haystack import Answer, Document, logging, component
+from haystack import Document, logging, component, GeneratedAnswer
 
 
 logger = logging.getLogger(__name__)
 
 @component
 class ExternalLinkAdder:
-    @component.output_types(documents=List[Answer])
-    def run(self, answers: List[Answer]):
+    @component.output_types(answers=List[GeneratedAnswer])
+    def run(self, answers: List[GeneratedAnswer]):
         for answer in answers:
             external_links = []
             if references:= answer.meta.get('_references', None):
